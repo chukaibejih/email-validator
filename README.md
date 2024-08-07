@@ -30,7 +30,7 @@ Here's an example of how to use the `EmailValidator` class:
 
 ```python
 
-from email_validator import EmailValidator
+from email_validator.validator import EmailValidator
 
 validator = EmailValidator()
 
