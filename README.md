@@ -1,4 +1,4 @@
-# Email Validator
+# Email Safeguard
 
 A robust email validation library with domain and TLD suggestions, disposable email detection, and MX record validation.
 
@@ -18,7 +18,7 @@ To install the library, use pip:
 
 ```sh
 
-pip install email-validator
+pip install email-safeguard
 
 ```
 
