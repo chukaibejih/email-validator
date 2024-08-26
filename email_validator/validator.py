@@ -44,7 +44,10 @@ class EmailValidator:
         if self.is_disposable(domain_part):
             return {"valid": False, "error": "Disposable email addresses are not allowed"}
 
-        if not self.mx_record_exists(domain_part):
+        mx_result = self.mx_record_exists(domain_part)
+        if mx_result == "timeout":
+            return {"valid": False, "error": f"Operation timed out. Check your connection and try again."}
+        elif not mx_result:
             return {"valid": False, "error": f"No MX records found for domain '{domain_part}'"}
         
 
@@ -107,5 +110,7 @@ class EmailValidator:
         try:
             dns.resolver.resolve(domain, 'MX')
             return True
-        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.Timeout):
+        except dns.resolver.Timeout:
+            return "timeout"
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
             return False
