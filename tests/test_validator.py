@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import os
 
-from email_validator.validator import EmailSafeguard, ValidationResult
+from email_safeguard.validator import EmailSafeguard, ValidationResult
 
 class TestEmailSafeguard(unittest.TestCase):
     def setUp(self):

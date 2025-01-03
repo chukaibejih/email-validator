@@ -32,7 +32,7 @@ setup(
     python_requires='>=3.6',
     entry_points={
         'console_scripts': [
-            'email_validator=email_validator:main',
+            'email_safeguard=email_safeguard.validator:main',
         ],
     },
     test_suite='tests',
