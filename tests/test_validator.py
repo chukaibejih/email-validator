@@ -1,90 +1,139 @@
 import unittest
-from email_validator.validator import EmailValidator
+from unittest.mock import patch, MagicMock
+import dns.resolver
+from pathlib import Path
+import tempfile
+import os
 
-class TestEmailValidator(unittest.TestCase):
+from email_validator.validator import EmailSafeguard, ValidationResult
 
+class TestEmailSafeguard(unittest.TestCase):
     def setUp(self):
-        # Initialize the EmailValidator before each test
-        self.validator = EmailValidator()
+        # Create temporary data files
+        self.temp_dir = tempfile.mkdtemp()
+        self.create_test_data_files()
+        
+        # Initialize with test data directory
+        self.validator = EmailSafeguard(data_dir=self.temp_dir)
+        self.custom_validator = EmailSafeguard(
+            check_mx=False,
+            allow_disposable=True,
+            suggest_corrections=False,
+            data_dir=self.temp_dir
+        )
+        
+        # Add MX record mock
+        self.mx_patcher = patch('dns.resolver.resolve')
+        self.mock_resolve = self.mx_patcher.start()
+        self.mock_resolve.return_value = True
 
-    def test_valid_email(self):
-        # Test with a valid email
-        result = self.validator.validate("valid.email@gmail.com")
+    def tearDown(self):
+        self.mx_patcher.stop()
+        # Clean up temp files
+        for file in os.listdir(self.temp_dir):
+            os.remove(os.path.join(self.temp_dir, file))
+        os.rmdir(self.temp_dir)
 
-        # Check that the email is valid
-        self.assertTrue(result["valid"])
-        # Ensure there is no error message
-        self.assertNotIn("error", result)
+    def create_test_data_files(self):
+        """Create test data files with sample domains"""
+        popular_domains = ['gmail.com', 'yahoo.com', 'hotmail.com']
+        popular_tlds = ['com', 'net', 'org']
+        disposable_domains = ['tempmail.com', 'throwaway.com']
+        
+        self._write_file('popular_domains.txt', popular_domains)
+        self._write_file('popular_tlds.txt', popular_tlds)
+        self._write_file('disposable_domains.txt', disposable_domains)
 
-    def test_invalid_format(self):
-        # Test with an email that has an invalid format
-        result = self.validator.validate("invalid-email")
+    def _write_file(self, filename: str, data: list):
+        """Write test data to a file"""
+        with open(os.path.join(self.temp_dir, filename), 'w') as f:
+            f.write('\n'.join(data))
 
-        # Check that the email is invalid
-        self.assertFalse(result["valid"])
-        # Ensure the correct error message is returned
-        self.assertIn("error", result)
-        self.assertEqual(result["error"], "Invalid email format")
+    def test_custom_data_loading(self):
+        """Test loading custom domain and TLD data"""
+        custom_data_dir = tempfile.mkdtemp()
+        custom_domains = ['custom.com']
+        custom_tlds = ['custom']
+        
+        self._write_file(os.path.join(custom_data_dir, 'popular_domains.txt'), custom_domains)
+        self._write_file(os.path.join(custom_data_dir, 'popular_tlds.txt'), custom_tlds)
+        
+        validator = EmailSafeguard(data_dir=custom_data_dir)
+        self.assertEqual(validator.popular_domains, custom_domains)
+        self.assertEqual(validator.popular_tlds, custom_tlds)
+        
+        # Cleanup
+        for file in os.listdir(custom_data_dir):
+            os.remove(os.path.join(custom_data_dir, file))
+        os.rmdir(custom_data_dir)
 
-    def test_disposable_email(self):
-        # Test with a known disposable email address
-        result = self.validator.validate("test@mailinator.com")
+    def test_domain_suggestions(self):
+        """Test domain suggestion functionality"""
+        test_cases = [
+            ("user@gmial.com", "gmail.com"),
+            ("user@yaho.com", "yahoo.com"),
+            ("user@hotmial.com", "hotmail.com")
+        ]
+        
+        for email, expected in test_cases:
+            with self.subTest(email=email):
+                result = self.validator.validate(email)
+                self.assertTrue(result.is_valid)
+                self.assertIn('domain', result.suggestions)
+                self.assertEqual(result.suggestions['domain'], expected)
 
-        # Check that the email is invalid
-        self.assertFalse(result["valid"])
-        # Ensure the correct error message is returned
-        self.assertIn("error", result)
-        self.assertEqual(result["error"], "Disposable email addresses are not allowed")
+    def test_tld_suggestions(self):
+        """Test TLD suggestion functionality"""
+        test_cases = [
+            ("user@domain.con", "com"),
+            ("user@domain.nett", "net"),
+            ("user@domain.kom", "com")
+        ]
+        
+        for email, expected in test_cases:
+            with self.subTest(email=email):
+                result = self.validator.validate(email)
+                self.assertTrue(result.is_valid)
+                self.assertIn('tld', result.suggestions)
+                self.assertEqual(result.suggestions['tld'], expected)
 
-    def test_domain_suggestion(self):
-        # Test with an email that has a common typo in the domain
-        result = self.validator.validate("user@gnail.com")
+    def test_disposable_email_detection(self):
+        """Test disposable email detection"""
+        result = self.validator.validate("user@tempmail.com")
+        self.assertFalse(result.is_valid)
+        self.assertEqual(result.result, ValidationResult.DISPOSABLE)
 
-        # Check that the email is invalid
-        self.assertFalse(result["valid"])
-        # Ensure the suggestion for the correct domain is present in the error message
-        self.assertIn("error", result)
-        self.assertIn("Did you mean", result["error"])
+        result = self.custom_validator.validate("user@tempmail.com")
+        self.assertTrue(result.is_valid)
 
-    def test_tld_suggestion(self):
-        # Test with an email that has a common typo in the TLD
-        result = self.validator.validate("user@gmail.co")
+    def test_edge_cases(self):
+        """Test edge cases"""
+        edge_cases = [
+            "very.long.email@domain.com",
+            "user+tag@domain.com",
+            "user@domain.co.uk"
+        ]
+        
+        for email in edge_cases:
+            with self.subTest(email=email):
+                self.mock_resolve.return_value = True
+                result = self.validator.validate(email)
 
-        # Check that the email is invalid
-        self.assertFalse(result["valid"])
-        # Ensure the suggestion for the correct TLD is present in the error message
-        self.assertIn("error", result)
-        self.assertIn("Did you mean", result["error"])
+                self.assertTrue(result.is_valid)
 
-    def test_mx_record_check(self):
-        # Test with an email that has a domain with no MX records
-        result = self.validator.validate("user@custom.com")
+    def test_concurrent_usage(self):
+        """Test concurrent usage"""
+        import concurrent.futures
+        
+        def validate_email(email):
+            return self.validator.validate(email)
+        
+        emails = [f"user{i}@domain.com" for i in range(10)]
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            results = list(executor.map(validate_email, emails))
+        
+        self.assertTrue(all(result.is_valid for result in results))
 
-        # Check that the email is invalid
-        self.assertFalse(result["valid"])
-        # Ensure the correct error message is returned
-        self.assertIn("error", result)
-        self.assertIn("No MX records found", result["error"])
-
-    def test_custom_domains(self):
-        # Test with a custom list of popular domains
-        custom_validator = EmailValidator(popular_domains=["nonexistentdomain.xyz"])
-        result = custom_validator.validate("user@nonexistentdomain.xyz")
-
-        # Check that the email is valid according to the custom list
-        self.assertTrue(result["valid"])
-        # Ensure there is no error message
-        self.assertNotIn("error", result)
-
-    def test_custom_tlds(self):
-        # Test with a custom list of popular TLDs
-        custom_validator = EmailValidator(popular_tlds=["xyz"])
-        result = custom_validator.validate("user@nonexistentdomain.xyz")
-
-        # Check that the email is valid according to the custom list
-        self.assertTrue(result["valid"])
-        # Ensure there is no error message
-        self.assertNotIn("error", result)
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

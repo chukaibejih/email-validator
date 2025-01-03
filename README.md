@@ -1,207 +1,130 @@
 # Email Safeguard
 
-A robust email validation library with domain and TLD suggestions, disposable email detection, and MX record validation.
+A comprehensive email validation library that provides domain suggestions, disposable email detection, and MX record validation with a focus on security and user experience.
+
+[![PyPI version](https://badge.fury.io/py/email-safeguard.svg)](https://badge.fury.io/py/email-safeguard)
+[![Python Versions](https://img.shields.io/pypi/pyversions/email-safeguard.svg)](https://pypi.org/project/email-safeguard/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Features
 
-- Validates email format using Django's built-in validators.
-
-- Detects disposable email addresses.
-
-- Suggests corrections for common domain and TLD typos.
-
-- Checks for valid MX records for the domain.
+- 🔍 Smart validation with helpful suggestions
+- 🛡️ Disposable email detection
+- 📨 MX record validation
+- ⚡ Fast and customizable
+- 🎯 Type hints and modern Python support
+- 🔧 Configurable validation rules
 
 ## Installation
 
-To install the library, use pip:
-
-```sh
-
+```bash
 pip install email-safeguard
-
 ```
 
-## Usage
-
-### Basic Usage
-
-Here's an example of how to use the `EmailValidator` class:
+## Quick Start
 
 ```python
+from email_safeguard import EmailSafeguard
 
-from email_validator.validator import EmailValidator
+validator = EmailSafeguard()
+result = validator.validate("user@gmial.com")
 
-validator = EmailValidator()
-
-result = validator.validate("user@example.com")
-
-if result["valid"]:
-
-    print("Email is valid!")
-
+if result.is_valid:
+    if result.suggestions:
+        print(f"Email is valid but did you mean: {result.suggestions['domain']}?")
+    else:
+        print("Email is valid!")
 else:
-
-    print("Error:", result["error"])
-
+    print(f"Error: {result.message}")
 ```
 
-### Custom Domain and TLD Lists
+## Advanced Usage
 
-You can customize the lists of popular domains, TLDs, and disposable domains by providing your own text files:
+### Custom Configuration
 
 ```python
-
-validator = EmailValidator(
-
-    domains_file='path/to/custom_domains.txt',
-
-    tlds_file='path/to/custom_tlds.txt',
-
-    disposable_file='path/to/custom_disposable_domains.txt'
-
+validator = EmailSafeguard(
+    check_mx=True,              # Enable MX record validation
+    allow_disposable=False,     # Reject disposable emails
+    suggest_corrections=True,   # Suggest corrections for typos
+    max_distance=2             # Maximum edit distance for suggestions
 )
+```
 
+### Handling Results
+
+```python
+from email_safeguard import EmailSafeguard, ValidationResult
+
+validator = EmailSafeguard()
+result = validator.validate("user@tempmail.com")
+
+match result.result:
+    case ValidationResult.VALID:
+        print("Email is valid!")
+    case ValidationResult.DISPOSABLE:
+        print("Disposable emails not allowed")
+    case ValidationResult.INVALID_DOMAIN:
+        print(f"Invalid domain. Did you mean: {result.suggestions['domain']}?")
+    case ValidationResult.NO_MX_RECORD:
+        print("Domain has no mail server")
 ```
 
 ## Data Files
 
-The library uses three data files for validation:
+The library uses three customizable data files:
 
-- **popular_domains.txt**: A list of popular email domains.
+- `popular_domains.txt`: Common email domains
+- `popular_tlds.txt`: Valid top-level domains
+- `disposable_domains.txt`: Known disposable email providers
 
-- **popular_tlds.txt**: A list of popular top-level domains (TLDs).
-
-- **disposable_domains.txt**: A list of known disposable email domains.
-
-Each file should contain one entry per line.
-
-### Example `popular_domains.txt`
-
-```
-
-gmail.com
-
-yahoo.com
-
-outlook.com
-
-hotmail.com
-
-```
-
-### Example `popular_tlds.txt`
-
-```
-
-com
-
-net
-
-org
-
-edu
-
-```
-
-### Example `disposable_domains.txt`
-
-```
-
-mailinator.com
-
-10minutemail.com
-
-```
-
-## Full Example
-
-Here's a more detailed example demonstrating all features:
+### Custom Data Files
 
 ```python
-
-import os
-
-from email_validator import EmailValidator
-
-# Initialize the validator with custom data files
-
-validator = EmailValidator(
-
-    domains_file='data/popular_domains.txt',
-
-    tlds_file='data/popular_tlds.txt',
-
-    disposable_file='data/disposable_domains.txt'
-
-)
-
-emails = [
-
-    "valid.email@gmail.com",
-
-    "invalid-email",
-
-    "test@mailinator.com",
-
-    "user@gnail.com",
-
-    "user@gmail.cmo",
-
-    "user@nonexistentdomain.xyz"
-
-]
-
-for email in emails:
-
-    result = validator.validate(email)
-
-    if result["valid"]:
-
-        print(f"{email} is valid!")
-
-    else:
-
-        print(f"Error with {email}: {result['error']}")
-
+validator = EmailSafeguard(data_dir="path/to/data/directory")
 ```
 
-## Running Tests
+## Development
 
-To run the tests, use the following command:
+### Running Tests
 
-```sh
+```bash
+# Run all tests
+python -m pytest
 
-python -m unittest discover
-
+# Run with coverage
+python -m pytest --cov=email_safeguard
 ```
 
-## License
+### Type Checking
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+```bash
+mypy email_safeguard
+```
 
 ## Contributing
 
-Contributions are welcome! Feel free to contribute to this project if you want to add new features, improve existing ones, or fix bugs.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## Issues
+## License
 
-Please raise and issue for bug reporst, feature requests or suggestions.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 ## Author
 
-Chukwuka Ibejih
-
-For any questions or feedback, please contact [chukaibejih@gmail.com](mailto:chukaibejih@gmail.com).
+Chukwuka Ibejih ([chukaibejih@gmail.com](mailto:chukaibejih@gmail.com))
 
 ## Acknowledgements
 
-This library uses the following third-party packages:
+Built with:
+- [Django](https://www.djangoproject.com/) - Email validation
+- [python-Levenshtein](https://github.com/ztane/python-Levenshtein/) - String similarity
+- [dnspython](https://www.dnspython.org/) - DNS queries
 
-- [Django](https://www.djangoproject.com/) for email validation
+---
 
-- [Levenshtein](https://pypi.org/project/python-Levenshtein/) for string similarity calculations
-
-- [dnspython](https://www.dnspython.org/) for DNS queries
-
-
-If you love this project, please consider giving me a ⭐
+If you find this library helpful, please give it a ⭐!
