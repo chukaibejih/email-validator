@@ -95,6 +95,21 @@ class EmailSafeguard:
                 return False
         return "timeout"
 
+    def _load_data(self, data_dir: str) -> None:
+        """Load domain lists from data files."""
+        self.popular_domains = self._load_file(os.path.join(data_dir, 'popular_domains.txt'))
+        self.popular_tlds = self._load_file(os.path.join(data_dir, 'popular_tlds.txt'))
+        self.disposable_domains = self._load_file(os.path.join(data_dir, 'disposable_domains.txt'))
+
+    @staticmethod
+    def _load_file(filepath: str) -> List[str]:
+        """Load and clean data from a file."""
+        try:
+            with open(filepath, 'r') as file:
+                return [line.strip().lower() for line in file if line.strip()]
+        except FileNotFoundError:
+            return []
+
     def validate(self, email: str, skip_mx_on_timeout: bool = True) -> ValidationResponse:
         """
         Validate an email address and provide detailed feedback.
