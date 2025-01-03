@@ -161,16 +161,7 @@ validator = EmailSafeguard(data_dir="path/to/data/directory")
 
 ```bash
 # Run all tests
-python -m pytest
-
-# Run with coverage
-python -m pytest --cov=email_safeguard
-```
-
-### Type Checking
-
-```bash
-mypy email_safeguard
+python run test_validator
 ```
 
 ## Contributing
