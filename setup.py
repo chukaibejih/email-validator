@@ -7,7 +7,7 @@ long_description = (this_directory / "README.md").read_text(encoding='utf-8')
 
 setup(
     name="email-safeguard",
-    version="0.1.3",
+    version="0.1.6",
     author="Chukwuka Ibejih",
     author_email="chukaibejih@gmail.com",
     description="A Python library for validating and suggesting corrections for email addresses.",
@@ -30,10 +30,5 @@ setup(
         "dnspython",
     ],
     python_requires='>=3.6',
-    entry_points={
-        'console_scripts': [
-            'email_safeguard=email_safeguard.validator:main',
-        ],
-    },
     test_suite='tests',
 )

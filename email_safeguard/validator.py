@@ -8,6 +8,7 @@ from pathlib import Path
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from Levenshtein import distance as levenshtein_distance
+import time
 
 class ValidationResult(Enum):
     VALID = "valid"
@@ -26,18 +27,16 @@ class ValidationResponse:
     suggestions: Optional[Dict[str, str]] = None
 
 class EmailSafeguard:
-    """
-    A comprehensive email validation tool that checks format, suggests corrections,
-    and validates domain authenticity.
-    """
-    
     def __init__(
         self,
         check_mx: bool = True,
         allow_disposable: bool = False,
         suggest_corrections: bool = True,
         max_distance: int = 2,
-        data_dir: Optional[str] = None
+        data_dir: Optional[str] = None,
+        dns_timeout: float = 2.0,  # Timeout in seconds
+        dns_retries: int = 2,      # Number of retries
+        retry_delay: float = 1.0   # Delay between retries in seconds
     ):
         """
         Initialize the email validator with customizable settings.
@@ -48,36 +47,61 @@ class EmailSafeguard:
             suggest_corrections: Whether to suggest corrections for typos
             max_distance: Maximum Levenshtein distance for suggestions
             data_dir: Custom directory for data files
+            dns_timeout: Timeout for DNS queries in seconds
+            dns_retries: Number of retry attempts for DNS queries
+            retry_delay: Delay between retry attempts in seconds
         """
         self.check_mx = check_mx
         self.allow_disposable = allow_disposable
         self.suggest_corrections = suggest_corrections
         self.max_distance = max_distance
+        self.dns_timeout = dns_timeout
+        self.dns_retries = dns_retries
+        self.retry_delay = retry_delay
+        
+        # Configure DNS resolver
+        self.resolver = dns.resolver.Resolver()
+        self.resolver.timeout = self.dns_timeout
+        self.resolver.lifetime = self.dns_timeout
         
         data_dir = data_dir or os.path.join(os.path.dirname(__file__), 'data')
         self._load_data(data_dir)
 
-    def _load_data(self, data_dir: str) -> None:
-        """Load domain lists from data files."""
-        self.popular_domains = self._load_file(os.path.join(data_dir, 'popular_domains.txt'))
-        self.popular_tlds = self._load_file(os.path.join(data_dir, 'popular_tlds.txt'))
-        self.disposable_domains = self._load_file(os.path.join(data_dir, 'disposable_domains.txt'))
+    def _check_mx_record(self, domain: str) -> Union[bool, str]:
+        """
+        Verify MX records exist for the domain with retry logic.
+        
+        Args:
+            domain: Domain to check for MX records
+            
+        Returns:
+            bool: True if MX records exist, False if not
+            str: "timeout" if all retries failed
+        """
+        attempts = 0
+        while attempts <= self.dns_retries:
+            try:
+                self.resolver.resolve(domain, 'MX')
+                return True
+            except dns.resolver.Timeout:
+                attempts += 1
+                if attempts <= self.dns_retries:
+                    time.sleep(self.retry_delay)
+                    continue
+                return "timeout"
+            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+                return False
+            except Exception:  # Handle other DNS-related errors
+                return False
+        return "timeout"
 
-    @staticmethod
-    def _load_file(filepath: str) -> List[str]:
-        """Load and clean data from a file."""
-        try:
-            with open(filepath, 'r') as file:
-                return [line.strip().lower() for line in file if line.strip()]
-        except FileNotFoundError:
-            return []
-
-    def validate(self, email: str) -> ValidationResponse:
+    def validate(self, email: str, skip_mx_on_timeout: bool = True) -> ValidationResponse:
         """
         Validate an email address and provide detailed feedback.
         
         Args:
             email: The email address to validate
+            skip_mx_on_timeout: If True, consider email valid if MX check times out
             
         Returns:
             ValidationResponse object containing validation results
@@ -119,11 +143,20 @@ class EmailSafeguard:
         if self.check_mx:
             mx_result = self._check_mx_record(domain_part)
             if mx_result == "timeout":
-                return ValidationResponse(
-                    is_valid=False,
-                    result=ValidationResult.TIMEOUT,
-                    message="Operation timed out while checking MX records"
-                )
+                if skip_mx_on_timeout:
+                    # Consider email valid but with suggestions if available
+                    return ValidationResponse(
+                        is_valid=True,
+                        result=ValidationResult.VALID,
+                        message="Email format is valid (MX check timed out)",
+                        suggestions=suggestions if suggestions else None
+                    )
+                else:
+                    return ValidationResponse(
+                        is_valid=False,
+                        result=ValidationResult.TIMEOUT,
+                        message="Operation timed out while checking MX records"
+                    )
             elif not mx_result:
                 return ValidationResponse(
                     is_valid=False,
